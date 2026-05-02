@@ -111,7 +111,7 @@ export default function AppLayout() {
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => (window.location.href = "/onboarding")}>
+              <DropdownMenuItem onClick={() => (window.location.href = "/onboarding?new=1")}>
                 + New company
               </DropdownMenuItem>
             </DropdownMenuContent>

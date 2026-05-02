@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { fmtUsd, fmtNum, logAudit } from "@/lib/platform";
 import { ArrowLeft, CheckCircle2, Send, Globe, Coins } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DocumentsTab } from "@/components/documents/DocumentsTab";
 
 type Product = {
   id: string; company_id: string; project_id: string; name: string; symbol: string;

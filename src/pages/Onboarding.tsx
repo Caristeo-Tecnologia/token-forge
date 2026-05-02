@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -14,9 +14,15 @@ const schema = z.object({
 });
 
 export default function Onboarding() {
-  const { user, refreshMemberships, setActiveCompanyId } = useAuth();
+  const { user, memberships, refreshMemberships, setActiveCompanyId } = useAuth();
   const nav = useNavigate();
+  const [params] = useSearchParams();
   const [loading, setLoading] = useState(false);
+
+  // Auto-redirect to /app once a company exists, unless explicitly creating another.
+  if (memberships.length > 0 && params.get("new") !== "1") {
+    return <Navigate to="/app" replace />;
+  }
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

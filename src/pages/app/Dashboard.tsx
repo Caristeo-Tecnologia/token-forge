@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PageContainer, PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { fmtNum, fmtUsd } from "@/lib/platform";
+import { fmtNum, fmtUsd, fmtUsdCompact } from "@/lib/platform";
 import { Coins, FileText, Package, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 

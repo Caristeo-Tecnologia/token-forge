@@ -13,6 +13,7 @@ import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/app/Dashboard";
 import Projects from "./pages/app/Projects";
+import ProjectDetail from "./pages/app/ProjectDetail";
 import Products from "./pages/app/Products";
 import ProductDetail from "./pages/app/ProductDetail";
 import Contracts from "./pages/app/Contracts";

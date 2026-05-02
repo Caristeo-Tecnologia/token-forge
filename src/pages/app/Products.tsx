@@ -41,40 +41,10 @@ export default function Products() {
         title="Products"
         subtitle="Tokenized investment products. Each follows the lifecycle: Draft → Review → Approved → Published."
         actions={canWrite(activeRole) && projects.length > 0 && (
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="size-4 mr-2" /> New Product</Button></DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader><DialogTitle>Create tokenized product</DialogTitle></DialogHeader>
-              <form onSubmit={create} className="space-y-4 max-h-[70vh] overflow-y-auto px-1 py-2 -mx-1">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Project *</Label>
-                    <Select name="project_id" required>
-                      <SelectTrigger><SelectValue placeholder="Choose…" /></SelectTrigger>
-                      <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2"><Label>Symbol *</Label><Input name="symbol" required maxLength={10} placeholder="GOLD" /></div>
-                </div>
-                <div className="space-y-2"><Label>Name *</Label><Input name="name" required maxLength={120} /></div>
-                <div className="space-y-2"><Label>Description</Label><Textarea name="description" maxLength={2000} rows={3} /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Token unit type *</Label>
-                    <Select name="token_unit_type" defaultValue="production">
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>{UNIT_TYPES.map(u => <SelectItem key={u.v} value={u.v}>{u.l}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2"><Label>Unit definition *</Label><Input name="token_unit_definition" required placeholder="1g of gold" maxLength={200} /></div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2"><Label>Total supply *</Label><Input name="total_supply" type="number" min={1} required /></div>
-                  <div className="space-y-2"><Label>Price (USD) *</Label><CurrencyInput name="token_price_usd" /></div>
-                  <div className="space-y-2"><Label>Funding target *</Label><CurrencyInput name="funding_target_usd" /></div>
-                </div>
-                <DialogFooter><Button type="submit" disabled={loading}>{loading ? "Creating…" : "Create as Draft"}</Button></DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <>
+            <Button onClick={() => setOpen(true)}><Plus className="size-4 mr-2" /> New Product</Button>
+            <ProductFormDialog open={open} onOpenChange={setOpen} projects={projects} onCreated={load} />
+          </>
         )}
       />
 

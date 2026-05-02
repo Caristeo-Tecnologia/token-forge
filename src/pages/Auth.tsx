@@ -94,15 +94,22 @@ export default function Auth() {
         }
       }
 
+      // Ensure session is active before calling RPC
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) {
+        toast.success("Account created. Please sign in to finish setup.");
+        return;
+      }
+
       const { data: companyId, error: rpcErr } = await supabase.rpc("create_company_with_owner", {
         _name: companyName, _slug: companySlug,
       });
       if (rpcErr) throw rpcErr;
 
-      await refreshMemberships();
       if (companyId) setActiveCompanyId(companyId as string);
+      await refreshMemberships();
       toast.success("Account & company created");
-      nav("/app");
+      nav("/app", { replace: true });
     } catch (err: any) {
       toast.error(err.message ?? "Sign up failed");
     } finally {

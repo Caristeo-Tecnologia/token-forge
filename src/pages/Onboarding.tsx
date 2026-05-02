@@ -29,20 +29,13 @@ export default function Onboarding() {
 
     setLoading(true);
     try {
-      const { data: company, error } = await supabase
-        .from("companies")
-        .insert({ name, slug, created_by: user.id })
-        .select()
-        .single();
+      const { data: companyId, error } = await supabase.rpc("create_company_with_owner", {
+        _name: name, _slug: slug,
+      });
       if (error) throw error;
 
-      const { error: memErr } = await supabase
-        .from("company_members")
-        .insert({ company_id: company.id, user_id: user.id, role: "owner" });
-      if (memErr) throw memErr;
-
       await refreshMemberships();
-      setActiveCompanyId(company.id);
+      if (companyId) setActiveCompanyId(companyId as string);
       toast.success("Company created");
       nav("/app");
     } catch (err: any) {

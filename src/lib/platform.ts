@@ -18,8 +18,19 @@ export async function logAudit(params: {
   });
 }
 
-export const fmtUsd = (n: number | null | undefined) =>
+export const fmtUsd = (n: number | null | undefined, decimals = 2) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(n ?? 0);
+
+export const fmtUsdCompact = (n: number | null | undefined) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n ?? 0);
 
-export const fmtNum = (n: number | null | undefined) =>
-  new Intl.NumberFormat("en-US").format(n ?? 0);
+export const fmtNum = (n: number | null | undefined, decimals = 0) =>
+  new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(n ?? 0);

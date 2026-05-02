@@ -58,7 +58,7 @@ export default function ProjectDetail() {
     if (!project || !activeCompany || !user) return;
     const step = NEXT[project.status];
     if (!step) return;
-    if (step.needsApprover && !canApprove?.(activeRole)) {
+    if (step.needsApprover && !canAdmin(activeRole)) {
       return toast.error("Only owners or admins can approve");
     }
     setAdvancing(true);

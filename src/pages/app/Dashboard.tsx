@@ -50,7 +50,7 @@ export default function Dashboard() {
   }, [activeCompany]);
 
   const kpis = [
-    { label: "Total Funding", value: fmtUsd(stats.totalFunding), icon: TrendingUp, accent: true },
+    { label: "Total Funding", value: fmtUsdCompact(stats.totalFunding), icon: TrendingUp, accent: true },
     { label: "Tokens Sold", value: fmtNum(stats.tokensSold), icon: Coins },
     { label: "Active Contracts", value: fmtNum(stats.activeContracts), icon: FileText },
     { label: "Funding Progress", value: `${stats.fundingPct.toFixed(1)}%`, icon: Package },

@@ -49,6 +49,12 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       onValueChange?.(num);
     };
 
+    const handleBlur = () => {
+      if (!raw) return;
+      const num = Number(raw);
+      if (Number.isFinite(num)) setRaw(num.toFixed(2));
+    };
+
     const display = formatDisplay(raw);
 
     return (

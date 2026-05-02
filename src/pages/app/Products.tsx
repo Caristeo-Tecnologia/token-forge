@@ -6,6 +6,7 @@ import { PageContainer, PageHeader, EmptyState } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -87,7 +88,7 @@ export default function Products() {
             <DialogTrigger asChild><Button><Plus className="size-4 mr-2" /> New Product</Button></DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader><DialogTitle>Create tokenized product</DialogTitle></DialogHeader>
-              <form onSubmit={create} className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+              <form onSubmit={create} className="space-y-4 max-h-[70vh] overflow-y-auto px-1 py-2 -mx-1">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Project *</Label>
                     <Select name="project_id" required>
@@ -110,8 +111,8 @@ export default function Products() {
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2"><Label>Total supply *</Label><Input name="total_supply" type="number" min={1} required /></div>
-                  <div className="space-y-2"><Label>Price (USD) *</Label><Input name="token_price_usd" type="number" step="0.01" min="0.01" required /></div>
-                  <div className="space-y-2"><Label>Funding target *</Label><Input name="funding_target_usd" type="number" min="1" required /></div>
+                  <div className="space-y-2"><Label>Price (USD) *</Label><CurrencyInput name="token_price_usd" /></div>
+                  <div className="space-y-2"><Label>Funding target *</Label><CurrencyInput name="funding_target_usd" /></div>
                 </div>
                 <DialogFooter><Button type="submit" disabled={loading}>{loading ? "Creating…" : "Create as Draft"}</Button></DialogFooter>
               </form>

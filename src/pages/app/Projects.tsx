@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth, canWrite, canDelete } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PageContainer, PageHeader, EmptyState } from "@/components/PageHeader";
@@ -100,11 +101,15 @@ export default function Projects() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {items.map(p => (
-            <div key={p.id} className="glass-card p-6 group">
+            <Link
+              key={p.id}
+              to={`/app/projects/${p.id}`}
+              className="glass-card p-6 group block hover:border-primary/40 transition-colors"
+            >
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{p.type.replace("_"," ")}</p>
-                  <h3 className="text-lg font-semibold mt-1">{p.name}</h3>
+                  <h3 className="text-lg font-semibold mt-1 group-hover:text-primary transition-colors">{p.name}</h3>
                 </div>
                 <StatusBadge status={p.status} />
               </div>
@@ -112,12 +117,16 @@ export default function Projects() {
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{new Date(p.created_at).toLocaleDateString()}</span>
                 {canDelete(activeRole) && (
-                  <button onClick={() => remove(p.id, p.name)} className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80">
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); remove(p.id, p.name); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive/80"
+                    aria-label="Delete project"
+                  >
                     <Trash2 className="size-3.5" />
                   </button>
                 )}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

@@ -1,30 +1,39 @@
-## Problema
+## Objetivo
 
-Os valores monetários (price, target, funding) estão sendo exibidos como inteiros ($8 em vez de $7.87) porque `fmtUsd` usa `maximumFractionDigits: 0`. O banco já armazena `numeric` com casas decimais — o problema é só de formatação e exibição.
+Permitir clicar num card de projeto na lista `/app/projects` e abrir uma página de detalhes com info do projeto + lista de produtos vinculados.
 
 ## Mudanças
 
-### 1. `src/lib/platform.ts` — formatadores
-- `fmtUsd(n)`: padrão passa a mostrar 2 casas (`minimumFractionDigits: 2, maximumFractionDigits: 2`).
-- Adicionar `fmtUsdCompact(n)` para casos onde queremos sem decimais (ex.: KPIs grandes), e usar nesses pontos específicos se necessário.
-- `fmtNum(n, decimals?)`: aceitar opcionalmente número de casas decimais (default 0, mantém compat).
+### 1. Nova página `src/pages/app/ProjectDetail.tsx` em `/app/projects/:id`
+Conteúdo:
+- Header: nome, tipo, status (StatusBadge), descrição, data de criação.
+- Ações (se `canWrite`): botão "Edit" (abre dialog reutilizando os mesmos campos do create — nome/tipo/descrição) e "+ New Product" (abre o mesmo fluxo de criação de produto, já com `project_id` pré-selecionado).
+- Ação destrutiva (se `canDelete`): botão "Delete project" no canto.
+- Seção "Products": tabela com mesmas colunas da página `/app/products` (Product, Token model, Supply, Price, Target, Status), linhas clicáveis levando a `/app/products/:id`.
+- Empty state quando não houver produtos: CTA "Create first product" abre o dialog de novo produto.
+- Filtra por `company_id = activeCompany.id AND project_id = :id` (RLS já garante isolamento).
+- Title: `${project.name} · Aetheria`.
+- Breadcrumb simples: `← Projects` no topo.
 
-### 2. `src/components/ui/currency-input.tsx`
-- Já aceita decimais (`.` com até 2 casas) — manter.
-- Adicionar `onBlur` que normaliza (ex.: "7.8" → "7.80") para clareza visual, sem alterar o hidden value bruto.
+### 2. `src/App.tsx`
+Adicionar rota:
+```tsx
+<Route path="projects/:id" element={<ProjectDetail />} />
+```
+dentro do bloco `/app`.
 
-### 3. Telas que exibem moeda
-Revisar e usar `fmtUsd` (agora com 2 casas) em:
-- `src/pages/app/Products.tsx` (Price, Target na tabela)
-- `src/pages/app/ProductDetail.tsx`
-- `src/pages/app/Dashboard.tsx` (KPIs — manter compacto sem decimais para "Total funding"; price unitário com decimais)
-- `src/pages/app/Tokens.tsx`
-- `src/pages/public/Catalog.tsx` e `CatalogProduct.tsx`
+### 3. `src/pages/app/Projects.tsx`
+- Envolver cada card em um `<Link to={\`/app/projects/${p.id}\`}>` (ou `useNavigate`) mantendo o card visualmente igual.
+- Botão de delete continua dentro do card mas com `e.preventDefault(); e.stopPropagation();` para não navegar.
+- Hover: cursor-pointer e leve elevação (já existe via `group`).
 
-Onde for KPI agregado grande (ex.: Total funding $1,234,567), usar `fmtUsdCompact`. Onde for preço unitário, usar `fmtUsd` com 2 casas.
+### 4. Reuso do form de produto
+O dialog de criação de produto está hoje só em `Products.tsx`. Para reusar em `ProjectDetail.tsx` sem duplicar, extrair em um componente:
+- **Novo**: `src/components/products/ProductForm.tsx` — dialog com props `{ open, onOpenChange, projects, defaultProjectId?, onCreated }`.
+- Atualizar `Products.tsx` para usar esse componente.
+- `ProjectDetail.tsx` usa o mesmo componente passando `defaultProjectId={id}` e `projects=[currentProject]` (lista travada num único item).
 
 ## Fora de escopo
-
-- Mudar tipos do banco (já são `numeric`, suportam float).
-- Suporte a múltiplas moedas.
-- `total_supply` continua `bigint` (quantidade inteira de tokens).
+- Edit inline de produtos.
+- Métricas agregadas do projeto (funding raised etc.) — pode ser feito depois.
+- Upload de capa/imagem do projeto.

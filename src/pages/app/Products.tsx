@@ -5,15 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageContainer, PageHeader, EmptyState } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { CurrencyInput } from "@/components/ui/currency-input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
-import { toast } from "sonner";
-import { fmtUsd, fmtNum, logAudit } from "@/lib/platform";
+import { fmtUsd, fmtNum } from "@/lib/platform";
+import { ProductFormDialog } from "@/components/products/ProductForm";
 
 type Product = {
   id: string; name: string; symbol: string; status: string;
@@ -23,18 +17,11 @@ type Product = {
 };
 type Project = { id: string; name: string };
 
-const UNIT_TYPES = [
-  { v: "production", l: "Production (e.g., 1g of gold)" },
-  { v: "profit_share", l: "Profit share (e.g., 0.001%)" },
-  { v: "asset_fraction", l: "Asset fraction" },
-];
-
 export default function Products() {
-  const { activeCompany, activeRole, user } = useAuth();
+  const { activeCompany, activeRole } = useAuth();
   const [items, setItems] = useState<Product[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const load = async () => {
     if (!activeCompany) return;
@@ -48,76 +35,16 @@ export default function Products() {
 
   useEffect(() => { document.title = "Products · Aetheria"; load(); }, [activeCompany]);
 
-  const create = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!activeCompany || !user) return;
-    const fd = new FormData(e.currentTarget);
-    const payload = {
-      company_id: activeCompany.id,
-      project_id: String(fd.get("project_id")),
-      name: String(fd.get("name") ?? "").trim(),
-      symbol: String(fd.get("symbol") ?? "").trim().toUpperCase(),
-      description: String(fd.get("description") ?? "").trim() || null,
-      token_unit_type: String(fd.get("token_unit_type") ?? "production") as any,
-      token_unit_definition: String(fd.get("token_unit_definition") ?? "").trim(),
-      total_supply: Number(fd.get("total_supply")),
-      token_price_usd: Number(fd.get("token_price_usd")),
-      funding_target_usd: Number(fd.get("funding_target_usd")),
-      created_by: user.id,
-    };
-    if (!payload.name || !payload.symbol || !payload.project_id) return toast.error("Fill all required fields");
-    if (!(payload.total_supply > 0) || !(payload.token_price_usd > 0)) return toast.error("Supply and price must be > 0");
-
-    setLoading(true);
-    const { data, error } = await supabase.from("products").insert(payload).select().single();
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    await logAudit({ companyId: activeCompany.id, actorId: user.id, action: "create", entityType: "product", entityId: data.id, metadata: { name: payload.name } });
-    toast.success("Product created (Draft)");
-    setOpen(false);
-    load();
-  };
-
   return (
     <PageContainer>
       <PageHeader
         title="Products"
         subtitle="Tokenized investment products. Each follows the lifecycle: Draft → Review → Approved → Published."
         actions={canWrite(activeRole) && projects.length > 0 && (
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Plus className="size-4 mr-2" /> New Product</Button></DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader><DialogTitle>Create tokenized product</DialogTitle></DialogHeader>
-              <form onSubmit={create} className="space-y-4 max-h-[70vh] overflow-y-auto px-1 py-2 -mx-1">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Project *</Label>
-                    <Select name="project_id" required>
-                      <SelectTrigger><SelectValue placeholder="Choose…" /></SelectTrigger>
-                      <SelectContent>{projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2"><Label>Symbol *</Label><Input name="symbol" required maxLength={10} placeholder="GOLD" /></div>
-                </div>
-                <div className="space-y-2"><Label>Name *</Label><Input name="name" required maxLength={120} /></div>
-                <div className="space-y-2"><Label>Description</Label><Textarea name="description" maxLength={2000} rows={3} /></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Token unit type *</Label>
-                    <Select name="token_unit_type" defaultValue="production">
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>{UNIT_TYPES.map(u => <SelectItem key={u.v} value={u.v}>{u.l}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2"><Label>Unit definition *</Label><Input name="token_unit_definition" required placeholder="1g of gold" maxLength={200} /></div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2"><Label>Total supply *</Label><Input name="total_supply" type="number" min={1} required /></div>
-                  <div className="space-y-2"><Label>Price (USD) *</Label><CurrencyInput name="token_price_usd" /></div>
-                  <div className="space-y-2"><Label>Funding target *</Label><CurrencyInput name="funding_target_usd" /></div>
-                </div>
-                <DialogFooter><Button type="submit" disabled={loading}>{loading ? "Creating…" : "Create as Draft"}</Button></DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <>
+            <Button onClick={() => setOpen(true)}><Plus className="size-4 mr-2" /> New Product</Button>
+            <ProductFormDialog open={open} onOpenChange={setOpen} projects={projects} onCreated={load} />
+          </>
         )}
       />
 

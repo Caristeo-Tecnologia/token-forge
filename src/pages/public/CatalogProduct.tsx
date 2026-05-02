@@ -130,6 +130,23 @@ export default function CatalogProduct() {
               </div>
             </div>
           )}
+
+          {docs.length > 0 && (
+            <div className="glass-card p-6">
+              <h2 className="font-semibold mb-3 flex items-center gap-2"><FileText className="size-4" /> Public documents</h2>
+              <ul className="divide-y divide-border/60">
+                {docs.map(d => (
+                  <li key={d.id} className="py-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">{d.name}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{d.category}</p>
+                    </div>
+                    <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">Open →</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <aside className="lg:col-span-1">

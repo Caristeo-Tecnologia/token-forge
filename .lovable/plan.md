@@ -1,30 +1,30 @@
-## Objetivo
+## Problema
 
-1. Adicionar máscara de moeda (USD) nos campos `Price (USD)` e `Funding target` do formulário "Create tokenized product".
-2. Corrigir o visual do foco — o ring azul está sendo cortado pelo `overflow-y-auto` do container do form.
+Os valores monetários (price, target, funding) estão sendo exibidos como inteiros ($8 em vez de $7.87) porque `fmtUsd` usa `maximumFractionDigits: 0`. O banco já armazena `numeric` com casas decimais — o problema é só de formatação e exibição.
 
 ## Mudanças
 
-### 1. Novo componente `src/components/ui/currency-input.tsx`
-Input controlado que:
-- Aceita `value` numérico (ou `defaultValue`) e dispara `onValueChange(number | null)`.
-- Mostra valor formatado em USD (`$1,234.56`) durante digitação, mantendo cursor estável.
-- Aceita apenas dígitos e um separador decimal; até 2 casas.
-- Renderiza um `<input type="hidden" name="...">` com o valor numérico cru (em string) para integrar com o `FormData` do form atual sem refatorar o submit.
-- Reaproveita as classes do `Input` shadcn (mesma altura/borda/focus).
+### 1. `src/lib/platform.ts` — formatadores
+- `fmtUsd(n)`: padrão passa a mostrar 2 casas (`minimumFractionDigits: 2, maximumFractionDigits: 2`).
+- Adicionar `fmtUsdCompact(n)` para casos onde queremos sem decimais (ex.: KPIs grandes), e usar nesses pontos específicos se necessário.
+- `fmtNum(n, decimals?)`: aceitar opcionalmente número de casas decimais (default 0, mantém compat).
 
-### 2. `src/pages/app/Products.tsx`
-- Substituir os dois `Input type="number"` de `token_price_usd` e `funding_target_usd` por `CurrencyInput` (com `name` para o hidden).
-- Manter `total_supply` como `Input type="number"` (é quantidade, não moeda).
-- Corrigir o clipping do focus ring:
-  - Remover `overflow-y-auto` agressivo + adicionar padding lateral/vertical no scroll container, ou
-  - Trocar `pr-2` por `p-1 -m-1` no wrapper interno para dar respiro ao ring (`focus-visible:ring-offset-2` precisa de espaço fora do input).
-  - Garantir que o `DialogContent` tenha padding suficiente; o scroll fica em um `<div>` interno com `px-1 py-1`.
+### 2. `src/components/ui/currency-input.tsx`
+- Já aceita decimais (`.` com até 2 casas) — manter.
+- Adicionar `onBlur` que normaliza (ex.: "7.8" → "7.80") para clareza visual, sem alterar o hidden value bruto.
 
-### 3. Estilo consistente
-- Não alterar tokens globais. Apenas ajustes locais de padding/overflow.
-- Símbolo `$` como prefixo visual dentro do `CurrencyInput` (cinza, não interativo) para ficar claro que é moeda.
+### 3. Telas que exibem moeda
+Revisar e usar `fmtUsd` (agora com 2 casas) em:
+- `src/pages/app/Products.tsx` (Price, Target na tabela)
+- `src/pages/app/ProductDetail.tsx`
+- `src/pages/app/Dashboard.tsx` (KPIs — manter compacto sem decimais para "Total funding"; price unitário com decimais)
+- `src/pages/app/Tokens.tsx`
+- `src/pages/public/Catalog.tsx` e `CatalogProduct.tsx`
+
+Onde for KPI agregado grande (ex.: Total funding $1,234,567), usar `fmtUsdCompact`. Onde for preço unitário, usar `fmtUsd` com 2 casas.
 
 ## Fora de escopo
-- Outros formulários do app (pode ser feito depois se quiser).
-- Suporte a múltiplas moedas — fixo em USD por enquanto.
+
+- Mudar tipos do banco (já são `numeric`, suportam float).
+- Suporte a múltiplas moedas.
+- `total_supply` continua `bigint` (quantidade inteira de tokens).

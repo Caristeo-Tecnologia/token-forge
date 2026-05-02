@@ -10,11 +10,12 @@ import { ArrowLeft, ShieldCheck, FileText, Coins, AlertTriangle } from "lucide-r
 import { toast } from "sonner";
 
 type Product = {
-  id: string; company_id: string; name: string; symbol: string; description: string | null;
+  id: string; company_id: string; project_id: string; name: string; symbol: string; description: string | null;
   total_supply: number; token_price_usd: number; funding_target_usd: number;
   token_unit_type: string; token_unit_definition: string;
 };
 type Sc = { id: string; tokens_sold: number; supply_issued: number; mock_address: string; network: string };
+type PubDoc = { id: string; name: string; category: string; file_url: string };
 
 const randHex = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
 

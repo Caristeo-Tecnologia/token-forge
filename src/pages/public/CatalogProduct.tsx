@@ -23,6 +23,7 @@ export default function CatalogProduct() {
   const { id } = useParams();
   const [p, setP] = useState<Product | null>(null);
   const [sc, setSc] = useState<Sc | null>(null);
+  const [docs, setDocs] = useState<PubDoc[]>([]);
   const [amount, setAmount] = useState<number>(1);
   const [acceptRisk, setAcceptRisk] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -35,6 +36,16 @@ export default function CatalogProduct() {
     setP(data as Product);
     const { data: scData } = await supabase.from("smart_contracts").select("*").eq("product_id", id).maybeSingle();
     setSc(scData as Sc);
+
+    if (data) {
+      const prod = data as Product;
+      const { data: docsData } = await supabase
+        .from("documents")
+        .select("id,name,category,file_url,project_id,product_id")
+        .eq("is_public", true)
+        .or(`product_id.eq.${prod.id},project_id.eq.${prod.project_id}`);
+      setDocs((docsData ?? []) as PubDoc[]);
+    }
   };
 
   useEffect(() => {
@@ -52,30 +63,16 @@ export default function CatalogProduct() {
     setPurchasing(true);
     try {
       const code = `BR-${randHex(24)}`;
-      const total = amount * Number(p.token_price_usd);
-
-      const { error: txErr } = await supabase.from("token_transactions").insert({
-        company_id: p.company_id,
-        product_id: p.id,
-        tx_type: "sale",
-        amount,
-        unit_price_usd: p.token_price_usd,
-        total_usd: total,
-        bearer_code: code,
-        mock_tx_hash: `0x${randHex(64)}`,
+      const txHash = `0x${randHex(64)}`;
+      const { data, error } = await supabase.rpc("record_token_sale", {
+        _product_id: p.id,
+        _amount: amount,
+        _bearer_code: code,
+        _tx_hash: txHash,
       });
-      if (txErr) throw txErr;
-
-      const { error: hErr } = await supabase.from("token_holdings").insert({
-        company_id: p.company_id,
-        product_id: p.id,
-        bearer_code: code,
-        amount,
-      });
-      if (hErr) throw hErr;
-
-      setBearerCode(code);
-      toast.success("Purchase recorded");
+      if (error) throw error;
+      setBearerCode((data as any)?.bearer_code ?? code);
+      toast.success("Purchase recorded on-chain (simulated)");
     } catch (err: any) {
       toast.error(err.message ?? "Purchase failed");
     } finally { setPurchasing(false); }

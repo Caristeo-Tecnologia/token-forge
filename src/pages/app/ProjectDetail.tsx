@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2, Send, CheckCircle2, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth, canWrite, canDelete, canApprove } from "@/contexts/AuthContext";
+import { useAuth, canWrite, canDelete, canAdmin } from "@/contexts/AuthContext";
 import { PageContainer, EmptyState } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth, canWrite, canDelete } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PageContainer, PageHeader, EmptyState } from "@/components/PageHeader";

@@ -70,6 +70,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
           autoComplete="off"
           value={display}
           onChange={handleChange}
+          onBlur={handleBlur}
           placeholder={placeholder ?? "0.00"}
           disabled={disabled}
           className={cn(

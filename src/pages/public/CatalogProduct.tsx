@@ -10,11 +10,12 @@ import { ArrowLeft, ShieldCheck, FileText, Coins, AlertTriangle } from "lucide-r
 import { toast } from "sonner";
 
 type Product = {
-  id: string; company_id: string; name: string; symbol: string; description: string | null;
+  id: string; company_id: string; project_id: string; name: string; symbol: string; description: string | null;
   total_supply: number; token_price_usd: number; funding_target_usd: number;
   token_unit_type: string; token_unit_definition: string;
 };
 type Sc = { id: string; tokens_sold: number; supply_issued: number; mock_address: string; network: string };
+type PubDoc = { id: string; name: string; category: string; file_url: string };
 
 const randHex = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
 
@@ -22,6 +23,7 @@ export default function CatalogProduct() {
   const { id } = useParams();
   const [p, setP] = useState<Product | null>(null);
   const [sc, setSc] = useState<Sc | null>(null);
+  const [docs, setDocs] = useState<PubDoc[]>([]);
   const [amount, setAmount] = useState<number>(1);
   const [acceptRisk, setAcceptRisk] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -34,6 +36,16 @@ export default function CatalogProduct() {
     setP(data as Product);
     const { data: scData } = await supabase.from("smart_contracts").select("*").eq("product_id", id).maybeSingle();
     setSc(scData as Sc);
+
+    if (data) {
+      const prod = data as Product;
+      const { data: docsData } = await supabase
+        .from("documents")
+        .select("id,name,category,file_url,project_id,product_id")
+        .eq("is_public", true)
+        .or(`product_id.eq.${prod.id},project_id.eq.${prod.project_id}`);
+      setDocs((docsData ?? []) as PubDoc[]);
+    }
   };
 
   useEffect(() => {
@@ -51,30 +63,16 @@ export default function CatalogProduct() {
     setPurchasing(true);
     try {
       const code = `BR-${randHex(24)}`;
-      const total = amount * Number(p.token_price_usd);
-
-      const { error: txErr } = await supabase.from("token_transactions").insert({
-        company_id: p.company_id,
-        product_id: p.id,
-        tx_type: "sale",
-        amount,
-        unit_price_usd: p.token_price_usd,
-        total_usd: total,
-        bearer_code: code,
-        mock_tx_hash: `0x${randHex(64)}`,
+      const txHash = `0x${randHex(64)}`;
+      const { data, error } = await supabase.rpc("record_token_sale", {
+        _product_id: p.id,
+        _amount: amount,
+        _bearer_code: code,
+        _tx_hash: txHash,
       });
-      if (txErr) throw txErr;
-
-      const { error: hErr } = await supabase.from("token_holdings").insert({
-        company_id: p.company_id,
-        product_id: p.id,
-        bearer_code: code,
-        amount,
-      });
-      if (hErr) throw hErr;
-
-      setBearerCode(code);
-      toast.success("Purchase recorded");
+      if (error) throw error;
+      setBearerCode((data as any)?.bearer_code ?? code);
+      toast.success("Purchase recorded on-chain (simulated)");
     } catch (err: any) {
       toast.error(err.message ?? "Purchase failed");
     } finally { setPurchasing(false); }
@@ -130,6 +128,23 @@ export default function CatalogProduct() {
                 <p><span className="text-muted-foreground">Network: </span><span className="font-mono">{sc.network}</span></p>
                 <p className="break-all"><span className="text-muted-foreground">Address: </span><span className="font-mono text-xs">{sc.mock_address}</span></p>
               </div>
+            </div>
+          )}
+
+          {docs.length > 0 && (
+            <div className="glass-card p-6">
+              <h2 className="font-semibold mb-3 flex items-center gap-2"><FileText className="size-4" /> Public documents</h2>
+              <ul className="divide-y divide-border/60">
+                {docs.map(d => (
+                  <li key={d.id} className="py-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">{d.name}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{d.category}</p>
+                    </div>
+                    <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">Open →</a>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

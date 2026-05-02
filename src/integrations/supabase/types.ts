@@ -399,6 +399,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          approved_at: string | null
           company_id: string
           cover_image_url: string | null
           created_at: string
@@ -411,6 +412,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          approved_at?: string | null
           company_id: string
           cover_image_url?: string | null
           created_at?: string
@@ -423,6 +425,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          approved_at?: string | null
           company_id?: string
           cover_image_url?: string | null
           created_at?: string
@@ -613,6 +616,15 @@ export type Database = {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
       }
+      record_token_sale: {
+        Args: {
+          _amount: number
+          _bearer_code: string
+          _product_id: string
+          _tx_hash: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "owner" | "admin" | "manager" | "viewer"
@@ -623,7 +635,13 @@ export type Database = {
         | "approved"
         | "published"
         | "archived"
-      project_status: "planning" | "active" | "completed" | "paused"
+      project_status:
+        | "planning"
+        | "active"
+        | "completed"
+        | "paused"
+        | "under_review"
+        | "approved"
       project_type:
         | "mining"
         | "real_estate"
@@ -770,7 +788,14 @@ export const Constants = {
         "published",
         "archived",
       ],
-      project_status: ["planning", "active", "completed", "paused"],
+      project_status: [
+        "planning",
+        "active",
+        "completed",
+        "paused",
+        "under_review",
+        "approved",
+      ],
       project_type: ["mining", "real_estate", "energy", "agriculture", "other"],
       return_type: ["fixed", "variable"],
       smart_contract_status: ["pending", "deployed", "active", "closed"],

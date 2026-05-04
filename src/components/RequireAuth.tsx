@@ -11,8 +11,8 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 export function RequireCompany({ children }: { children: ReactNode }) {
-  const { user, loading, memberships } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
+  const { user, loading, memberships, membershipsLoaded } = useAuth();
+  if (loading || (user && !membershipsLoaded)) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
   if (!user) return <Navigate to="/auth" replace />;
   if (memberships.length === 0) return <Navigate to="/onboarding" replace />;
   return <>{children}</>;

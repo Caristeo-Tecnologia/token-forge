@@ -1,30 +1,16 @@
 ## Diagnóstico
 
-O app não está em loading infinito. Ele redireciona para `/onboarding` porque a consulta de empresas do usuário logado está retornando lista vazia (`[]`). No backend, existe uma empresa (`Mineradora`), mas ela está vinculada a outro usuário. O usuário logado atual é `email@email.com`, com id diferente do usuário dono dessa empresa.
+O erro `Invalid key` do Supabase Storage acontece porque o nome do arquivo (`Acesso Cidadão.pdf`) tem espaço e caractere acentuado (`ã`). As chaves do Storage só aceitam caracteres seguros (letras, números, `.`, `_`, `-`, `/`).
 
-## Plano de correção
+Hoje em `DocumentsTab.tsx` o caminho é montado direto com `file.name`, sem sanitização.
 
-1. **Corrigir a guarda de rota para evitar falso onboarding**
-   - Adicionar no `AuthContext` um estado separado para saber quando as empresas/memberships já terminaram de carregar.
-   - Fazer `RequireCompany` esperar esse carregamento antes de decidir redirecionar.
-   - Fazer a tela de onboarding também esperar esse carregamento antes de mostrar o formulário.
+## Plano
 
-2. **Melhorar a experiência quando o usuário realmente não tem empresa**
-   - Manter o redirecionamento para `/onboarding` apenas quando a busca terminou e realmente não há empresa vinculada ao usuário atual.
-   - Isso evita redirecionamento prematuro por corrida entre autenticação e consulta.
+1. Em `src/components/documents/DocumentsTab.tsx`, sanitizar o nome do arquivo antes de montar o `path` do upload:
+   - Remover acentos (NFD + strip diacríticos).
+   - Substituir espaços e caracteres não permitidos por `-`.
+   - Preservar a extensão original.
+2. Manter o `name` original (digitado pelo usuário) na coluna `name` da tabela `documents`, para exibição amigável.
+3. Mostrar mensagem de erro clara caso o upload falhe.
 
-3. **Validar o dado real do usuário atual**
-   - Como o usuário logado atual não está vinculado à empresa existente, depois da correção a tela ainda pode continuar em onboarding se esse usuário realmente não tiver empresa.
-   - Se a intenção for que `email@email.com` seja dono da empresa `Mineradora`, será necessário vincular esse usuário à empresa existente como `owner` em uma etapa separada de dados.
-
-## Arquivos que serão alterados
-
-- `src/contexts/AuthContext.tsx`
-- `src/components/RequireAuth.tsx`
-- `src/pages/Onboarding.tsx`
-
-## Resultado esperado
-
-- Usuários com empresa não serão mandados para onboarding por atraso de carregamento.
-- Usuários sem empresa continuarão vendo onboarding corretamente.
-- O comportamento fica mais claro e previsível após login, refresh e troca de rota.
+Sem mudanças de banco e sem mudanças em outras telas.

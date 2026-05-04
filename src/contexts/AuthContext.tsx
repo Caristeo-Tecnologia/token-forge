@@ -9,6 +9,7 @@ interface AuthCtx {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  membershipsLoaded: boolean;
   memberships: Membership[];
   activeCompany: Company | null;
   activeRole: Membership["role"] | null;

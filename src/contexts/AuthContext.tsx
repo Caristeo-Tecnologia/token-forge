@@ -9,6 +9,7 @@ interface AuthCtx {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  membershipsLoaded: boolean;
   memberships: Membership[];
   activeCompany: Company | null;
   activeRole: Membership["role"] | null;
@@ -24,20 +25,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [membershipsLoaded, setMembershipsLoaded] = useState(false);
   const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(
     () => localStorage.getItem("activeCompanyId")
   );
 
   const fetchMemberships = async (uid: string) => {
-    const { data } = await supabase
-      .from("company_members")
-      .select("company_id, role, companies(id, name, slug, brand_color)")
-      .eq("user_id", uid);
-    const list = (data ?? []) as unknown as Membership[];
-    setMemberships(list);
-    if (list.length && !activeCompanyId) {
-      setActiveCompanyIdState(list[0].company_id);
-      localStorage.setItem("activeCompanyId", list[0].company_id);
+    try {
+      const { data } = await supabase
+        .from("company_members")
+        .select("company_id, role, companies(id, name, slug, brand_color)")
+        .eq("user_id", uid);
+      const list = (data ?? []) as unknown as Membership[];
+      setMemberships(list);
+      if (list.length && !activeCompanyId) {
+        setActiveCompanyIdState(list[0].company_id);
+        localStorage.setItem("activeCompanyId", list[0].company_id);
+      }
+    } finally {
+      setMembershipsLoaded(true);
     }
   };
 
@@ -46,15 +52,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
+        setMembershipsLoaded(false);
         setTimeout(() => fetchMemberships(s.user.id), 0);
       } else {
         setMemberships([]);
+        setMembershipsLoaded(true);
       }
     });
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
-      if (s?.user) fetchMemberships(s.user.id);
+      if (s?.user) {
+        fetchMemberships(s.user.id);
+      } else {
+        setMembershipsLoaded(true);
+      }
       setLoading(false);
     });
     return () => sub.subscription.unsubscribe();
@@ -72,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider value={{
-      user, session, loading, memberships, activeCompany, activeRole,
+      user, session, loading, membershipsLoaded, memberships, activeCompany, activeRole,
       setActiveCompanyId,
       refreshMemberships: () => user ? fetchMemberships(user.id) : Promise.resolve(),
       signOut: async () => { await supabase.auth.signOut(); },

@@ -14,10 +14,14 @@ const schema = z.object({
 });
 
 export default function Onboarding() {
-  const { user, memberships, refreshMemberships, setActiveCompanyId } = useAuth();
+  const { user, memberships, membershipsLoaded, refreshMemberships, setActiveCompanyId } = useAuth();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const [loading, setLoading] = useState(false);
+
+  if (user && !membershipsLoaded) {
+    return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
+  }
 
   // Auto-redirect to /app once a company exists, unless explicitly creating another.
   if (memberships.length > 0 && params.get("new") !== "1") {

@@ -139,13 +139,27 @@ function UploadDialog({
 
   const reset = () => { setFile(null); setName(""); setCategory("other"); setIsPublic(true); };
 
+  const sanitizeFilename = (n: string) => {
+    const dot = n.lastIndexOf(".");
+    const base = (dot > 0 ? n.slice(0, dot) : n)
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "file";
+    const ext = (dot > 0 ? n.slice(dot + 1) : "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "").slice(0, 10).toLowerCase();
+    return ext ? `${base}.${ext}` : base;
+  };
+
   const submit = async () => {
     if (!file) return toast.error("Choose a file");
     if (!name.trim()) return toast.error("Name is required");
     setLoading(true);
     try {
       const scopeFolder = scope.productId ? `products/${scope.productId}` : `projects/${scope.projectId}`;
-      const path = `${companyId}/${scopeFolder}/${crypto.randomUUID()}-${file.name}`;
+      const safeName = sanitizeFilename(file.name);
+      const path = `${companyId}/${scopeFolder}/${crypto.randomUUID()}-${safeName}`;
       const { error: upErr } = await supabase.storage.from("documents").upload(path, file, {
         cacheControl: "3600", upsert: false,
       });

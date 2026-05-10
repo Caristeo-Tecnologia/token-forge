@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, FileText, ShoppingCart, Send, Star, Tag, Layers, Building2 } from "lucide-react";
 import { toast } from "sonner";
@@ -9,7 +9,6 @@ import { fmtNum, fmtUsd } from "@/lib/platform";
 import { aggregateRating, supplierDisplayName, type PoolWithSupplier } from "@/lib/marketplace";
 
 import { ProductDetailPage } from "@/components/ui/product-detail-page";
-import { ButtonCta } from "@/components/ui/button-shiny";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,12 +26,12 @@ type Doc = {
   created_at: string;
 };
 
-type Review = {
+type SupplierReviewRow = {
   id: string;
   rating: number;
   comment: string | null;
-  customer_id: string;
-  customer_name: string;
+  reviewer_id: string;
+  reviewer_display_name: string;
   created_at: string;
 };
 
@@ -44,25 +43,33 @@ const POOL_SELECT = `
   metadata_uri, mint_address, pda_address, performance_mock_pct,
   physical_available, physical_total, physical_unit, product_id,
   tokens_per_physical_unit, updated_at, volume_mock_usd,
-  suppliers:supplier_id ( id, fantasy_name, company_name, logo_url, description, status )
+  suppliers:supplier_id ( id, user_id, fantasy_name, company_name, logo_url, description, status )
 `;
 
 export default function MarketplaceProduct() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, customerProfile } = useAuth();
+  const { user } = useAuth();
   const isLoggedIn = !!user;
 
   const [pool, setPool] = useState<PoolWithSupplier | null>(null);
   const [loading, setLoading] = useState(true);
   const [docs, setDocs] = useState<Doc[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [hasPosition, setHasPosition] = useState(false);
+  const [supplierReviews, setSupplierReviews] = useState<SupplierReviewRow[]>([]);
 
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
-  const [submittingReview, setSubmittingReview] = useState(false);
+  const [supplierReviewRating, setSupplierReviewRating] = useState(5);
+  const [supplierReviewComment, setSupplierReviewComment] = useState("");
+  const [submittingSupplierReview, setSubmittingSupplierReview] = useState(false);
+
+  const loadSupplierReviews = useCallback(async (supplierId: string) => {
+    const { data } = await supabase
+      .from("supplier_reviews")
+      .select("id, rating, comment, reviewer_id, reviewer_display_name, created_at")
+      .eq("supplier_id", supplierId)
+      .order("created_at", { ascending: false });
+    setSupplierReviews((data ?? []) as SupplierReviewRow[]);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -97,28 +104,13 @@ export default function MarketplaceProduct() {
         setDocs([]);
       }
 
-      const { data: reviewData } = await supabase
-        .from("product_reviews")
-        .select("id, rating, comment, customer_id, customer_name, created_at")
-        .eq("pool_id", p.id)
-        .order("created_at", { ascending: false });
-      setReviews((reviewData ?? []) as Review[]);
-
-      if (customerProfile) {
-        const { data: pos } = await supabase
-          .from("customer_positions")
-          .select("id, token_balance")
-          .eq("customer_id", customerProfile.id)
-          .eq("pool_id", p.id)
-          .maybeSingle();
-        setHasPosition(!!pos && Number(pos.token_balance) > 0);
-      } else {
-        setHasPosition(false);
-      }
+      const sid = p.suppliers?.id ?? p.supplier_id;
+      if (sid) await loadSupplierReviews(sid);
+      else setSupplierReviews([]);
     })();
-  }, [id, customerProfile]);
+  }, [id, loadSupplierReviews]);
 
-  const summary = useMemo(() => aggregateRating(reviews), [reviews]);
+  const supplierSummary = useMemo(() => aggregateRating(supplierReviews), [supplierReviews]);
 
   const breadcrumbs = useMemo(
     () => [
@@ -133,36 +125,38 @@ export default function MarketplaceProduct() {
 
   const goAuth = () => navigate(`/auth?next=${encodeURIComponent(location.pathname)}`);
 
-  const submitReview = async () => {
-    if (!pool || !customerProfile) return;
-    setSubmittingReview(true);
+  const reviewerDisplayName =
+    (user?.user_metadata?.full_name as string | undefined)?.trim() ||
+    user?.email?.split("@")[0] ||
+    "User";
+
+  const submitSupplierReview = async () => {
+    const supplier = pool?.suppliers;
+    const sid = supplier?.id ?? pool?.supplier_id;
+    if (!pool || !user || !sid) return;
+    setSubmittingSupplierReview(true);
     try {
-      const { error } = await supabase.from("product_reviews").insert({
-        pool_id: pool.id,
-        customer_id: customerProfile.id,
-        customer_name: customerProfile.name || user?.email?.split("@")[0] || "Anonymous",
-        rating: reviewRating,
-        comment: reviewComment.trim() || null,
+      const { error } = await supabase.from("supplier_reviews").insert({
+        supplier_id: sid,
+        reviewer_id: user.id,
+        reviewer_display_name: reviewerDisplayName,
+        rating: supplierReviewRating,
+        comment: supplierReviewComment.trim() || null,
       });
       if (error) {
-        if (error.code === "23505") toast.error("You already reviewed this offering.");
+        if (error.code === "23505") toast.error("You already reviewed this supplier.");
         else throw error;
       } else {
         toast.success("Review posted");
-        setReviewComment("");
-        setReviewRating(5);
-        const { data: refreshed } = await supabase
-          .from("product_reviews")
-          .select("id, rating, comment, customer_id, customer_name, created_at")
-          .eq("pool_id", pool.id)
-          .order("created_at", { ascending: false });
-        setReviews((refreshed ?? []) as Review[]);
+        setSupplierReviewComment("");
+        setSupplierReviewRating(5);
+        await loadSupplierReviews(sid);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to post review";
       toast.error(message);
     } finally {
-      setSubmittingReview(false);
+      setSubmittingSupplierReview(false);
     }
   };
 
@@ -191,6 +185,9 @@ export default function MarketplaceProduct() {
 
   const supplier = pool.suppliers;
   const supplierName = supplierDisplayName(supplier);
+  const supplierOwner = !!(supplier?.user_id && user?.id && supplier.user_id === user.id);
+  const alreadyReviewed = !!(user?.id && supplierReviews.some((r) => r.reviewer_id === user.id));
+  const canRateSupplier = isLoggedIn && supplier && !supplierOwner && !alreadyReviewed;
 
   const tags = [
     pool.asset_class_name && { label: pool.asset_class_name, icon: Tag },
@@ -198,6 +195,8 @@ export default function MarketplaceProduct() {
     pool.token_symbol && { label: pool.token_symbol, icon: Tag },
     { label: pool.status.replace("_", " "), icon: Tag },
   ].filter((t): t is { label: string; icon: typeof Tag } => !!t);
+
+  const registerBtnClass = "w-fit shrink-0";
 
   const actions = isLoggedIn ? (
     <div className="flex flex-col sm:flex-row gap-2 my-6">
@@ -218,21 +217,21 @@ export default function MarketplaceProduct() {
       </Button>
     </div>
   ) : (
-    <div className="flex flex-col gap-3 my-6 p-5 rounded-xl border border-border bg-muted/40">
-      <p className="text-sm text-foreground">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 my-6 p-5 rounded-xl border border-border bg-muted/40">
+      <p className="text-sm text-foreground flex-1">
         Faça login para ver o preço, comprar tokens e contatar o fornecedor.
       </p>
-      <ButtonCta
-        label="Register Now"
-        className="w-full sm:w-2/3"
-        onClick={goAuth}
-      />
+      <Button type="button" variant="default" className={registerBtnClass} onClick={goAuth}>
+        Register Now
+      </Button>
     </div>
   );
 
   const priceFallback = (
-    <div className="flex items-center gap-3">
-      <ButtonCta label="Register Now" className="w-auto px-6" onClick={goAuth} />
+    <div className="flex flex-wrap items-center gap-3">
+      <Button type="button" variant="default" size="default" className={registerBtnClass} onClick={goAuth}>
+        Register Now
+      </Button>
       <span className="text-sm text-muted-foreground">to view price</span>
     </div>
   );
@@ -258,7 +257,7 @@ export default function MarketplaceProduct() {
               id: supplier?.id,
               name: supplierName,
               avatarUrl: supplier?.logo_url || "/placeholder.svg",
-              rating: summary.avg,
+              rating: supplierSummary.avg,
               href: supplier?.id ? `/marketplace/supplier/${supplier.id}` : undefined,
             }}
             breadcrumbs={breadcrumbs}
@@ -271,9 +270,6 @@ export default function MarketplaceProduct() {
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 <TabsTrigger value="documents">
                   Documents <span className="ml-1.5 text-xs text-muted-foreground">{docs.length}</span>
-                </TabsTrigger>
-                <TabsTrigger value="reviews">
-                  Reviews <span className="ml-1.5 text-xs text-muted-foreground">{summary.count}</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -288,14 +284,8 @@ export default function MarketplaceProduct() {
                       <SpecRow label="Token name" value={pool.token_name} />
                       <SpecRow label="Asset class" value={pool.asset_class_name ?? "—"} />
                       <SpecRow label="Status" value={pool.status.replace("_", " ")} />
-                      <SpecRow
-                        label="Total supply"
-                        value={fmtNum(Number(pool.total_supply))}
-                      />
-                      <SpecRow
-                        label="Available supply"
-                        value={fmtNum(Number(pool.available_supply))}
-                      />
+                      <SpecRow label="Total supply" value={fmtNum(Number(pool.total_supply))} />
+                      <SpecRow label="Available supply" value={fmtNum(Number(pool.available_supply))} />
                       {pool.physical_unit && (
                         <SpecRow
                           label={`Physical unit`}
@@ -303,10 +293,7 @@ export default function MarketplaceProduct() {
                         />
                       )}
                       {isLoggedIn ? (
-                        <SpecRow
-                          label="Unit price"
-                          value={fmtUsd(Number(pool.unit_price))}
-                        />
+                        <SpecRow label="Unit price" value={fmtUsd(Number(pool.unit_price))} />
                       ) : (
                         <SpecRow label="Unit price" value="Login required" muted />
                       )}
@@ -314,20 +301,36 @@ export default function MarketplaceProduct() {
                   </div>
 
                   {supplier && (
-                    <div className="glass-card p-5">
-                      <h3 className="font-semibold flex items-center gap-2 mb-3">
+                    <div className="glass-card p-5 space-y-4">
+                      <h3 className="font-semibold flex items-center gap-2 mb-1">
                         <Building2 className="size-4" /> About the supplier
                       </h3>
-                      <div className="flex items-start gap-3 mb-3">
+                      <div className="flex items-start gap-3">
                         <Avatar className="size-12">
                           <AvatarImage src={supplier.logo_url ?? undefined} alt={supplierName} />
                           <AvatarFallback>{supplierName.charAt(0)}</AvatarFallback>
                         </Avatar>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="font-medium truncate">{supplierName}</p>
                           <Badge variant="secondary" className="capitalize text-xs mt-1">
                             {supplier.status?.replace("_", " ")}
                           </Badge>
+                          <div className="flex items-center gap-1 mt-2">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <Star
+                                key={n}
+                                className={`size-3.5 ${
+                                  n <= Math.round(supplierSummary.avg)
+                                    ? "text-yellow-400 fill-yellow-400"
+                                    : "text-muted-foreground/40"
+                                }`}
+                              />
+                            ))}
+                            <span className="text-xs text-muted-foreground ml-1">
+                              {supplierSummary.avg.toFixed(1)} · {supplierSummary.count}{" "}
+                              {supplierSummary.count === 1 ? "review" : "reviews"}
+                            </span>
+                          </div>
                         </div>
                       </div>
                       {supplier.description && (
@@ -335,11 +338,24 @@ export default function MarketplaceProduct() {
                           {supplier.description}
                         </p>
                       )}
-                      <Button asChild variant="link" className="px-0 mt-2">
-                        <Link to={`/marketplace/supplier/${supplier.id}`}>
-                          View supplier profile →
-                        </Link>
+                      <Button asChild variant="link" className="px-0 h-auto py-0">
+                        <Link to={`/marketplace/supplier/${supplier.id}`}>View supplier profile →</Link>
                       </Button>
+
+                      <SupplierReviewsPanel
+                        reviews={supplierReviews}
+                        loginPrompt={!isLoggedIn}
+                        supplierOwner={supplierOwner}
+                        alreadyReviewed={alreadyReviewed}
+                        canRate={canRateSupplier}
+                        rating={supplierReviewRating}
+                        setRating={setSupplierReviewRating}
+                        comment={supplierReviewComment}
+                        setComment={setSupplierReviewComment}
+                        submitting={submittingSupplierReview}
+                        onSubmit={submitSupplierReview}
+                        onLogin={goAuth}
+                      />
                     </div>
                   )}
                 </div>
@@ -348,25 +364,124 @@ export default function MarketplaceProduct() {
               <TabsContent value="documents" className="mt-6">
                 <DocumentsList docs={docs} />
               </TabsContent>
-
-              <TabsContent value="reviews" className="mt-6">
-                <ReviewsSection
-                  summary={summary}
-                  reviews={reviews}
-                  canPost={isLoggedIn && !!customerProfile && hasPosition}
-                  loginPrompt={!isLoggedIn}
-                  reviewRating={reviewRating}
-                  setReviewRating={setReviewRating}
-                  reviewComment={reviewComment}
-                  setReviewComment={setReviewComment}
-                  submitting={submittingReview}
-                  onSubmit={submitReview}
-                  onLogin={goAuth}
-                />
-              </TabsContent>
             </Tabs>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SupplierReviewsPanel({
+  reviews,
+  loginPrompt,
+  supplierOwner,
+  alreadyReviewed,
+  canRate,
+  rating,
+  setRating,
+  comment,
+  setComment,
+  submitting,
+  onSubmit,
+  onLogin,
+}: {
+  reviews: SupplierReviewRow[];
+  loginPrompt: boolean;
+  supplierOwner: boolean;
+  alreadyReviewed: boolean;
+  canRate: boolean;
+  rating: number;
+  setRating: (n: number) => void;
+  comment: string;
+  setComment: (s: string) => void;
+  submitting: boolean;
+  onSubmit: () => void;
+  onLogin: () => void;
+}) {
+  return (
+    <div className="border-t border-border/60 pt-4 space-y-4">
+      <h4 className="text-sm font-semibold">Supplier reviews</h4>
+
+      {reviews.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No supplier reviews yet.</p>
+      ) : (
+        <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
+          {reviews.slice(0, 8).map((r) => (
+            <li key={r.id} className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium truncate">{r.reviewer_display_name}</span>
+                <span className="text-[11px] text-muted-foreground shrink-0">
+                  {new Date(r.created_at).toLocaleDateString()}
+                </span>
+              </div>
+              <div className="flex gap-0.5 mt-1">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Star
+                    key={n}
+                    className={`size-3 ${
+                      n <= r.rating ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground/40"
+                    }`}
+                  />
+                ))}
+              </div>
+              {r.comment && <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">{r.comment}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="rounded-lg border border-dashed border-border p-3 space-y-3">
+        <p className="text-xs font-medium">Rate this supplier</p>
+        {loginPrompt ? (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <p className="text-xs text-muted-foreground flex-1">Sign in to leave a review.</p>
+            <Button type="button" variant="outline" size="sm" className="w-fit shrink-0" onClick={onLogin}>
+              Register Now
+            </Button>
+          </div>
+        ) : supplierOwner ? (
+          <p className="text-xs text-muted-foreground">You cannot review your own supplier profile.</p>
+        ) : alreadyReviewed ? (
+          <p className="text-xs text-muted-foreground">You already reviewed this supplier.</p>
+        ) : canRate ? (
+          <div className="space-y-2">
+            <div>
+              <Label className="text-xs">Rating</Label>
+              <div className="flex gap-1 mt-1">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} type="button" onClick={() => setRating(n)} aria-label={`${n} stars`}>
+                    <Star
+                      className={`size-5 transition ${
+                        n <= rating
+                          ? "text-yellow-400 fill-yellow-400"
+                          : "text-muted-foreground/40 hover:text-yellow-400/70"
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="supplier-review-comment" className="text-xs">
+                Comment (optional)
+              </Label>
+              <Textarea
+                id="supplier-review-comment"
+                rows={3}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Share your experience with this supplier…"
+                className="mt-1 text-sm"
+              />
+            </div>
+            <Button type="button" size="sm" className="w-fit" onClick={onSubmit} disabled={submitting}>
+              {submitting ? "Posting…" : "Post review"}
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Unable to submit a review.</p>
+        )}
       </div>
     </div>
   );
@@ -431,10 +546,7 @@ function DocumentsList({ docs }: { docs: Doc[] }) {
   return (
     <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
       {docs.map((d) => (
-        <li
-          key={d.id}
-          className="glass-card p-4 flex items-center justify-between gap-3"
-        >
+        <li key={d.id} className="glass-card p-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="size-10 rounded-lg bg-secondary flex items-center justify-center text-secondary-foreground flex-shrink-0">
               <FileText className="size-5" />
@@ -454,160 +566,5 @@ function DocumentsList({ docs }: { docs: Doc[] }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-function ReviewsSection({
-  summary,
-  reviews,
-  canPost,
-  loginPrompt,
-  reviewRating,
-  setReviewRating,
-  reviewComment,
-  setReviewComment,
-  submitting,
-  onSubmit,
-  onLogin,
-}: {
-  summary: { avg: number; count: number };
-  reviews: Review[];
-  canPost: boolean;
-  loginPrompt: boolean;
-  reviewRating: number;
-  setReviewRating: (n: number) => void;
-  reviewComment: string;
-  setReviewComment: (s: string) => void;
-  submitting: boolean;
-  onSubmit: () => void;
-  onLogin: () => void;
-}) {
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-      <div>
-        <div className="glass-card p-5 mb-5 flex items-center gap-4">
-          <div>
-            <p className="text-3xl font-bold tabular">{summary.avg.toFixed(1)}</p>
-            <p className="text-xs text-muted-foreground">{summary.count} reviews</p>
-          </div>
-          <div className="flex-1 flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <Star
-                key={n}
-                className={`size-5 ${
-                  n <= Math.round(summary.avg)
-                    ? "text-yellow-400 fill-yellow-400"
-                    : "text-muted-foreground/40"
-                }`}
-              />
-            ))}
-          </div>
-        </div>
-
-        {reviews.length === 0 ? (
-          <div className="glass-card p-10 text-center">
-            <Star className="size-6 mx-auto text-muted-foreground mb-2" />
-            <p className="font-semibold">No reviews yet</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Be the first to share your experience.
-            </p>
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            {reviews.map((r) => (
-              <li key={r.id} className="glass-card p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <Avatar className="size-9">
-                    <AvatarFallback>{r.customer_name.charAt(0).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{r.customer_name}</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex">
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <Star
-                            key={n}
-                            className={`size-3 ${
-                              n <= r.rating
-                                ? "text-yellow-400 fill-yellow-400"
-                                : "text-muted-foreground/40"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                      <span className="text-[11px] text-muted-foreground">
-                        {new Date(r.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                {r.comment && (
-                  <p className="text-sm text-muted-foreground whitespace-pre-line">
-                    {r.comment}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <aside>
-        <div className="glass-card p-5 sticky top-24">
-          <h3 className="font-semibold mb-2">Write a review</h3>
-          {loginPrompt ? (
-            <>
-              <p className="text-xs text-muted-foreground mb-3">
-                Login to share your experience with this offering.
-              </p>
-              <ButtonCta label="Register Now" className="w-full" onClick={onLogin} />
-            </>
-          ) : !canPost ? (
-            <p className="text-xs text-muted-foreground">
-              You need an active position in this pool to leave a review.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">Rating</Label>
-                <div className="flex gap-1 mt-1">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setReviewRating(n)}
-                      aria-label={`${n} stars`}
-                    >
-                      <Star
-                        className={`size-6 transition ${
-                          n <= reviewRating
-                            ? "text-yellow-400 fill-yellow-400"
-                            : "text-muted-foreground/40 hover:text-yellow-400/70"
-                        }`}
-                      />
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="review-comment" className="text-xs">
-                  Comment (optional)
-                </Label>
-                <Textarea
-                  id="review-comment"
-                  rows={4}
-                  value={reviewComment}
-                  onChange={(e) => setReviewComment(e.target.value)}
-                  placeholder="Share what you liked or what could be better…"
-                />
-              </div>
-              <Button onClick={onSubmit} disabled={submitting} className="w-full">
-                {submitting ? "Posting…" : "Post review"}
-              </Button>
-            </div>
-          )}
-        </div>
-      </aside>
-    </div>
   );
 }

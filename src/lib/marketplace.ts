@@ -5,7 +5,7 @@ type AssetPoolRow = Database["public"]["Tables"]["asset_pools"]["Row"];
 type SupplierRow = Database["public"]["Tables"]["suppliers"]["Row"];
 
 export type PoolWithSupplier = AssetPoolRow & {
-  suppliers: Pick<SupplierRow, "id" | "fantasy_name" | "company_name" | "logo_url"> | null;
+  suppliers: Pick<SupplierRow, "id" | "fantasy_name" | "company_name" | "logo_url" | "user_id"> | null;
 };
 
 const PLACEHOLDER_IMAGE = "/placeholder.svg";

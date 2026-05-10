@@ -41,7 +41,7 @@ const POOL_SELECT = `
   metadata_uri, mint_address, pda_address, performance_mock_pct,
   physical_available, physical_total, physical_unit, product_id,
   tokens_per_physical_unit, updated_at, volume_mock_usd,
-  suppliers:supplier_id ( id, fantasy_name, company_name, logo_url )
+  suppliers:supplier_id ( id, user_id, fantasy_name, company_name, logo_url )
 `;
 
 export default function Marketplace() {

@@ -1,7 +1,7 @@
 import { NavLink, useLocation, Outlet } from "react-router-dom";
 import {
-  LayoutDashboard, FolderKanban, Package, FileText, Coins,
-  Files, Megaphone, Users, ShieldCheck, LogOut, Building2, ChevronDown,
+  LayoutDashboard, FolderKanban, Package, FileText, Coins, Layers,
+  Files, Megaphone, Users, ShieldCheck, Shield, LogOut, Building2, ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FarmchainLogoImg, FARMCHAIN_BRAND } from "@/components/FarmchainLogo";
 
 const nav = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/app/pools", label: "Pools", icon: Layers },
   { to: "/app/projects", label: "Projects", icon: FolderKanban },
   { to: "/app/products", label: "Products", icon: Package },
   { to: "/app/contracts", label: "Contracts", icon: FileText },
@@ -26,7 +28,7 @@ const adminNav = [
 ];
 
 export default function AppLayout() {
-  const { user, memberships, activeCompany, activeRole, setActiveCompanyId, signOut } = useAuth();
+  const { user, memberships, activeCompany, activeRole, setActiveCompanyId, signOut, isPlatformAdmin } = useAuth();
   const loc = useLocation();
 
   return (
@@ -34,10 +36,8 @@ export default function AppLayout() {
       {/* Sidebar */}
       <aside className="w-64 shrink-0 border-r border-border/60 bg-sidebar/70 backdrop-blur-xl flex flex-col">
         <div className="h-16 flex items-center px-6 border-b border-border/60">
-          <div className="size-8 bg-primary rounded-lg flex items-center justify-center mr-3">
-            <div className="size-3.5 border-2 border-primary-foreground rounded-sm rotate-45" />
-          </div>
-          <span className="font-semibold tracking-tight text-lg">Aetheria</span>
+          <FarmchainLogoImg className="h-9 mr-3" />
+          <span className="font-semibold tracking-tight text-lg">{FARMCHAIN_BRAND}</span>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -77,12 +77,24 @@ export default function AppLayout() {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-border/60">
+        <div className="p-4 border-t border-border/60 space-y-2">
+          {isPlatformAdmin ? (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `flex items-center gap-2 text-xs font-medium rounded-md px-2 py-1.5 transition-colors ${
+                  isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:text-foreground"
+                }`
+              }
+            >
+              <Shield className="size-3.5" /> Platform admin
+            </NavLink>
+          ) : null}
           <a
             href="/catalog"
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors block"
           >
             View public catalog →
           </a>

@@ -14,13 +14,18 @@ const schema = z.object({
 });
 
 export default function Onboarding() {
-  const { user, memberships, membershipsLoaded, refreshMemberships, setActiveCompanyId } = useAuth();
+  const { user, memberships, membershipsLoaded, customerProfile, refreshMemberships, setActiveCompanyId } = useAuth();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const [loading, setLoading] = useState(false);
 
   if (user && !membershipsLoaded) {
     return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
+  }
+
+  // Buyer-only accounts use /portal; company onboarding is optional via ?new=1.
+  if (customerProfile && memberships.length === 0 && params.get("new") !== "1") {
+    return <Navigate to="/portal" replace />;
   }
 
   // Auto-redirect to /app once a company exists, unless explicitly creating another.

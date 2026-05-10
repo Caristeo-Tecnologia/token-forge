@@ -33,7 +33,7 @@ export default function Products() {
     setProjects((pj.data ?? []) as Project[]);
   };
 
-  useEffect(() => { document.title = "Products · Aetheria"; load(); }, [activeCompany]);
+  useEffect(() => { document.title = "Products · Farmchain"; load(); }, [activeCompany]);
 
   return (
     <PageContainer>

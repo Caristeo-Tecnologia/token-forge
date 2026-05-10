@@ -35,7 +35,7 @@ export default function Projects() {
     setItems((data ?? []) as Project[]);
   };
 
-  useEffect(() => { document.title = "Projects · Aetheria"; load(); }, [activeCompany]);
+  useEffect(() => { document.title = "Projects · Farmchain"; load(); }, [activeCompany]);
 
   const create = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

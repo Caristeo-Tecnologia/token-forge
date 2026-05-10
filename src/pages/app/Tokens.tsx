@@ -16,7 +16,7 @@ export default function Tokens() {
   const [txs, setTxs] = useState<Tx[]>([]);
 
   useEffect(() => {
-    document.title = "Tokens · Aetheria";
+    document.title = "Tokens · Farmchain";
     if (!activeCompany) return;
     supabase.from("token_transactions")
       .select("*, products(name, symbol)")

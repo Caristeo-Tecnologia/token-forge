@@ -23,7 +23,7 @@ export default function Users() {
     setMembers((data ?? []) as unknown as Member[]);
   };
 
-  useEffect(() => { document.title = "Users · Aetheria"; load(); }, [activeCompany]);
+  useEffect(() => { document.title = "Users · Farmchain"; load(); }, [activeCompany]);
 
   if (!canAdmin(activeRole)) {
     return <PageContainer><EmptyState title="Restricted" description="Only owners and admins can manage users." /></PageContainer>;

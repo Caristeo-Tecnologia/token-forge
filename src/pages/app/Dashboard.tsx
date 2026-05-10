@@ -26,7 +26,7 @@ export default function Dashboard() {
   const [products, setProducts] = useState<ProductRow[]>([]);
 
   useEffect(() => {
-    document.title = "Dashboard · Aetheria";
+    document.title = "Dashboard · Farmchain";
     if (!activeCompany) return;
     (async () => {
       const [{ data: prods }, { data: txs }, { data: contracts }] = await Promise.all([

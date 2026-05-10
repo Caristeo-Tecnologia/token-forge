@@ -13,7 +13,7 @@ export default function AuditLog() {
   const [logs, setLogs] = useState<Log[]>([]);
 
   useEffect(() => {
-    document.title = "Audit · Aetheria";
+    document.title = "Audit · Farmchain";
     if (!activeCompany || !canAdmin(activeRole)) return;
     supabase.from("audit_logs").select("*").eq("company_id", activeCompany.id)
       .order("created_at", { ascending: false }).limit(500)

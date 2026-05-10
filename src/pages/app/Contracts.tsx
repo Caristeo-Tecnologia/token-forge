@@ -35,7 +35,7 @@ export default function Contracts() {
     setProducts((p.data ?? []) as Product[]);
   };
 
-  useEffect(() => { document.title = "Contracts · Aetheria"; load(); }, [activeCompany]);
+  useEffect(() => { document.title = "Contracts · Farmchain"; load(); }, [activeCompany]);
 
   const create = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

@@ -7,18 +7,51 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { fmtUsd, fmtNum, logAudit } from "@/lib/platform";
-import { ArrowLeft, CheckCircle2, Send, Globe, Coins } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Send, Globe, Coins, Layers } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocumentsTab } from "@/components/documents/DocumentsTab";
 
 type Product = {
-  id: string; company_id: string; project_id: string; name: string; symbol: string;
-  description: string | null; status: string; total_supply: number;
-  token_price_usd: number; funding_target_usd: number;
-  token_unit_type: string; token_unit_definition: string;
-  approved_at: string | null; published_at: string | null;
+  id: string;
+  company_id: string;
+  project_id: string;
+  name: string;
+  symbol: string;
+  description: string | null;
+  status: string;
+  total_supply: number;
+  token_price_usd: number;
+  funding_target_usd: number;
+  token_unit_type: string;
+  token_unit_definition: string;
+  approved_at: string | null;
+  published_at: string | null;
+  asset_pool_id: string | null;
 };
-type SmartContract = { id: string; mock_address: string; network: string; supply_issued: number; tokens_sold: number; status: string };
+type SmartContract = {
+  id: string;
+  mock_address: string;
+  network: string;
+  supply_issued: number;
+  tokens_sold: number;
+  status: string;
+};
+type AssetPool = {
+  id: string;
+  slug: string;
+  status: string;
+  blockchain_status: string;
+  mint_address: string | null;
+  pda_address: string | null;
+  marketplace_listed: boolean;
+  physical_unit: string | null;
+  physical_total: number | null;
+  physical_available: number | null;
+  tokens_per_physical_unit: number | null;
+  display_unit_label: string | null;
+  total_supply: number;
+  available_supply: number;
+};
 
 const NEXT: Record<string, { next: string; label: string; icon: any }> = {
   draft: { next: "under_review", label: "Submit for review", icon: Send },
@@ -33,6 +66,7 @@ export default function ProductDetail() {
   const { activeCompany, activeRole, user } = useAuth();
   const [p, setP] = useState<Product | null>(null);
   const [sc, setSc] = useState<SmartContract | null>(null);
+  const [pool, setPool] = useState<AssetPool | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = async () => {
@@ -41,10 +75,18 @@ export default function ProductDetail() {
     setP(data as Product);
     const { data: scData } = await supabase.from("smart_contracts").select("*").eq("product_id", id).maybeSingle();
     setSc(scData as SmartContract | null);
+    const { data: poolData } = await supabase
+      .from("asset_pools")
+      .select(
+        "id, slug, status, blockchain_status, mint_address, pda_address, marketplace_listed, physical_unit, physical_total, physical_available, tokens_per_physical_unit, display_unit_label, total_supply, available_supply",
+      )
+      .eq("product_id", id)
+      .maybeSingle();
+    setPool(poolData as AssetPool | null);
   };
 
   useEffect(() => {
-    document.title = "Product · Aetheria";
+    document.title = "Product · Farmchain";
     load();
   }, [id]);
 
@@ -88,6 +130,30 @@ export default function ProductDetail() {
 
       if (step.next === "published" && sc) {
         await supabase.from("smart_contracts").update({ status: "active" }).eq("id", sc.id);
+      }
+
+      if (step.next === "approved") {
+        const { error: poolErr } = await supabase
+          .from("asset_pools")
+          .update({
+            blockchain_status: "minted",
+            mint_address: `SoL${randHex(40)}`,
+            pda_address: `Pda${randHex(36)}`,
+            status: "tokenized",
+          })
+          .eq("product_id", p.id);
+        if (poolErr) console.warn(poolErr.message);
+      }
+
+      if (step.next === "published") {
+        const { error: pubPoolErr } = await supabase
+          .from("asset_pools")
+          .update({
+            marketplace_listed: true,
+            listed_at: new Date().toISOString(),
+          })
+          .eq("product_id", p.id);
+        if (pubPoolErr) console.warn(pubPoolErr.message);
       }
 
       await logAudit({
@@ -151,6 +217,57 @@ export default function ProductDetail() {
               <div className="h-full bg-primary transition-all" style={{ width: `${Math.min(100, fundingPct)}%` }} />
             </div>
           </div>
+
+          {pool && (
+            <div className="glass-card p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Layers className="size-4" /> Pool / tokenização (RWA)
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Slug da pool</p>
+                  <p className="font-mono text-xs mt-1">{pool.slug}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Estado pool / chain</p>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <StatusBadge status={pool.status} />
+                    <StatusBadge status={pool.blockchain_status} />
+                  </div>
+                </div>
+                {(pool.physical_total != null || pool.display_unit_label || pool.physical_unit) && (
+                  <div className="sm:col-span-2">
+                    <p className="text-muted-foreground">Total disponível (unidade física)</p>
+                    <p className="mt-1 tabular">
+                      {pool.physical_available != null ? fmtNum(Number(pool.physical_available)) : "—"} /{" "}
+                      {pool.physical_total != null ? fmtNum(Number(pool.physical_total)) : "—"}{" "}
+                      <span className="text-muted-foreground">
+                        {pool.display_unit_label || pool.physical_unit || ""}
+                      </span>
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-muted-foreground">Supply (tokens)</p>
+                  <p className="tabular mt-1">
+                    {fmtNum(pool.available_supply)} / {fmtNum(pool.total_supply)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Marketplace</p>
+                  <p className="mt-1">{pool.marketplace_listed ? "Listado" : "Não listado"}</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-muted-foreground">Mint (mock / futuro real)</p>
+                  <p className="font-mono text-xs mt-1 break-all">{pool.mint_address ?? "—"}</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-muted-foreground">PDA</p>
+                  <p className="font-mono text-xs mt-1 break-all">{pool.pda_address ?? "—"}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="glass-card p-6">
             <h3 className="font-semibold mb-4 flex items-center gap-2"><Coins className="size-4" /> Simulated Smart Contract</h3>

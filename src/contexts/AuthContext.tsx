@@ -1,9 +1,15 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+import { buildPostLoginSnapshot, getPostLoginPath } from "@/lib/auth-routes";
 
 type Company = { id: string; name: string; slug: string; brand_color: string | null };
 type Membership = { company_id: string; role: "owner" | "admin" | "manager" | "viewer"; companies: Company };
+
+type PlatformAdminRow = Database["public"]["Tables"]["platform_admins"]["Row"];
+type SupplierRow = Database["public"]["Tables"]["suppliers"]["Row"];
+type CustomerRow = Database["public"]["Tables"]["customers"]["Row"];
 
 interface AuthCtx {
   user: User | null;
@@ -16,6 +22,19 @@ interface AuthCtx {
   setActiveCompanyId: (id: string) => void;
   refreshMemberships: () => Promise<void>;
   signOut: () => Promise<void>;
+
+  platformAdmin: PlatformAdminRow | null;
+  supplierProfile: SupplierRow | null;
+  customerProfile: CustomerRow | null;
+
+  /** True when memberships + platform/supplier/customer profiles have been fetched */
+  sessionReady: boolean;
+  /** OAuth / edge: logged in but no platform role, supplier, customer, or company */
+  needsRegistrationCompletion: boolean;
+  supplierApproved: boolean;
+  isPlatformAdmin: boolean;
+  /** Resolved destination when sessionReady; null while loading */
+  postLoginPath: string | null;
 }
 
 const Ctx = createContext<AuthCtx | undefined>(undefined);
@@ -26,24 +45,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [membershipsLoaded, setMembershipsLoaded] = useState(false);
-  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(
-    () => localStorage.getItem("activeCompanyId")
+  const [platformAdmin, setPlatformAdmin] = useState<PlatformAdminRow | null>(null);
+  const [supplierProfile, setSupplierProfile] = useState<SupplierRow | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<CustomerRow | null>(null);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
+
+  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(() =>
+    localStorage.getItem("activeCompanyId"),
   );
 
-  const fetchMemberships = async (uid: string) => {
+  const fetchSessionData = async (uid: string) => {
+    setMembershipsLoaded(false);
+    setProfilesLoaded(false);
     try {
-      const { data } = await supabase
-        .from("company_members")
-        .select("company_id, role, companies(id, name, slug, brand_color)")
-        .eq("user_id", uid);
-      const list = (data ?? []) as unknown as Membership[];
+      const [memRes, paRes, supRes, custRes] = await Promise.all([
+        supabase
+          .from("company_members")
+          .select("company_id, role, companies(id, name, slug, brand_color)")
+          .eq("user_id", uid),
+        supabase.from("platform_admins").select("*").eq("user_id", uid).maybeSingle(),
+        supabase.from("suppliers").select("*").eq("user_id", uid).maybeSingle(),
+        supabase.from("customers").select("*").eq("user_id", uid).maybeSingle(),
+      ]);
+
+      const list = (memRes.data ?? []) as unknown as Membership[];
       setMemberships(list);
-      if (list.length && !activeCompanyId) {
-        setActiveCompanyIdState(list[0].company_id);
-        localStorage.setItem("activeCompanyId", list[0].company_id);
+      if (list.length) {
+        const stored = localStorage.getItem("activeCompanyId");
+        const valid = stored && list.some(m => m.company_id === stored);
+        if (!valid) {
+          setActiveCompanyIdState(list[0].company_id);
+          localStorage.setItem("activeCompanyId", list[0].company_id);
+        }
       }
+
+      setPlatformAdmin(paRes.data ?? null);
+      setSupplierProfile(supRes.data ?? null);
+      setCustomerProfile(custRes.data ?? null);
     } finally {
       setMembershipsLoaded(true);
+      setProfilesLoaded(true);
     }
   };
 
@@ -52,20 +93,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        setMembershipsLoaded(false);
-        setTimeout(() => fetchMemberships(s.user.id), 0);
+        setTimeout(() => fetchSessionData(s.user.id), 0);
       } else {
         setMemberships([]);
+        setPlatformAdmin(null);
+        setSupplierProfile(null);
+        setCustomerProfile(null);
         setMembershipsLoaded(true);
+        setProfilesLoaded(true);
       }
     });
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        fetchMemberships(s.user.id);
+        fetchSessionData(s.user.id);
       } else {
         setMembershipsLoaded(true);
+        setProfilesLoaded(true);
       }
       setLoading(false);
     });
@@ -82,13 +127,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activeCompany = activeMembership?.companies ?? null;
   const activeRole = activeMembership?.role ?? null;
 
+  const sessionReady = membershipsLoaded && profilesLoaded;
+  const isPlatformAdmin = !!platformAdmin?.active;
+  const supplierApproved = supplierProfile?.status === "approved";
+
+  const needsRegistrationCompletion = !!(
+    user &&
+    sessionReady &&
+    !isPlatformAdmin &&
+    !supplierProfile &&
+    !customerProfile &&
+    memberships.length === 0
+  );
+
+  const postLoginPath = useMemo(() => {
+    if (!user || !sessionReady) return null;
+    const snap = buildPostLoginSnapshot({
+      platformAdmin,
+      supplier: supplierProfile,
+      customer: customerProfile,
+      membershipsLength: memberships.length,
+    });
+    return getPostLoginPath(snap);
+  }, [user, sessionReady, platformAdmin, supplierProfile, customerProfile, memberships.length]);
+
   return (
-    <Ctx.Provider value={{
-      user, session, loading, membershipsLoaded, memberships, activeCompany, activeRole,
-      setActiveCompanyId,
-      refreshMemberships: () => user ? fetchMemberships(user.id) : Promise.resolve(),
-      signOut: async () => { await supabase.auth.signOut(); },
-    }}>
+    <Ctx.Provider
+      value={{
+        user,
+        session,
+        loading,
+        membershipsLoaded: sessionReady,
+        memberships,
+        activeCompany,
+        activeRole,
+        setActiveCompanyId,
+        refreshMemberships: async () => {
+          if (user) await fetchSessionData(user.id);
+        },
+        signOut: async () => {
+          await supabase.auth.signOut();
+        },
+        platformAdmin,
+        supplierProfile,
+        customerProfile,
+        sessionReady,
+        needsRegistrationCompletion,
+        supplierApproved,
+        isPlatformAdmin,
+        postLoginPath,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );
@@ -102,7 +191,5 @@ export const useAuth = () => {
 
 export const canWrite = (role: AuthCtx["activeRole"]) =>
   role === "owner" || role === "admin" || role === "manager";
-export const canDelete = (role: AuthCtx["activeRole"]) =>
-  role === "owner" || role === "admin";
-export const canAdmin = (role: AuthCtx["activeRole"]) =>
-  role === "owner" || role === "admin";
+export const canDelete = (role: AuthCtx["activeRole"]) => role === "owner" || role === "admin";
+export const canAdmin = (role: AuthCtx["activeRole"]) => role === "owner" || role === "admin";

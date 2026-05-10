@@ -49,7 +49,7 @@ export default function CatalogProduct() {
   };
 
   useEffect(() => {
-    document.title = "Offering · Aetheria";
+    document.title = "Offering · Farmchain";
     load();
   }, [id]);
 

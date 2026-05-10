@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtUsd, fmtNum } from "@/lib/platform";
 import { Button } from "@/components/ui/button";
+import { FarmchainLogoImg, FARMCHAIN_BRAND } from "@/components/FarmchainLogo";
 
 type Product = {
   id: string; name: string; symbol: string; description: string | null;
@@ -15,7 +16,7 @@ export default function Catalog() {
   const [progress, setProgress] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    document.title = "Catalog · Aetheria";
+    document.title = "Catalog · Farmchain";
     (async () => {
       const { data } = await supabase.from("products")
         .select("id,name,symbol,description,total_supply,token_price_usd,funding_target_usd,token_unit_definition,published_at")
@@ -40,10 +41,8 @@ export default function Catalog() {
       <header className="border-b border-border/60 bg-background/80 backdrop-blur-md sticky top-0 z-10">
         <div className="max-w-7xl mx-auto h-16 flex items-center justify-between px-6">
           <Link to="/" className="flex items-center gap-3">
-            <div className="size-8 bg-primary rounded-lg flex items-center justify-center">
-              <div className="size-3.5 border-2 border-primary-foreground rounded-sm rotate-45" />
-            </div>
-            <span className="font-semibold tracking-tight text-lg">Aetheria</span>
+            <FarmchainLogoImg className="h-9" />
+            <span className="font-semibold tracking-tight text-lg">{FARMCHAIN_BRAND}</span>
           </Link>
           <Link to="/auth" className="text-sm text-muted-foreground hover:text-foreground">Issuer login →</Link>
         </div>

@@ -1,0 +1,495 @@
+{
+  "info": {
+    "_postman_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "name": "Tokenized Assets API",
+    "description": "All HTTP routes from `AdminPingController`, `AdminRestController`, `ClientPingController`, and `ClientChainController` (global prefix **`/v1`**).\n\n## Collection variables\nReplace **`exampleAssetMint`**, **`exampleAssetPda`**, **`exampleWallet`**, **`exampleRedemptionId`**, **`exampleTxSignature`**, and **`exampleChallengeId`** with values from your chain / flows. Defaults use the native mint pubkey as a stand-in Solana address.\n\n## Environment\nImport **`local.postman_environment.json`** and set **ADMIN_HMAC_SECRET** and **CLIENT_HMAC_SECRET** (≥32 chars, match backend `.env`).\n\n## HMAC\nThe pre-request script uses **CryptoJS** (SHA-256 + HMAC-SHA256 hex) — not Node `require('crypto')`, which Postman Web and some sandboxes block. Resolution order: global `CryptoJS` → `require('crypto-js')` → `pm.require('crypto-js')`. If signing fails, add the **crypto-js** package in Postman’s Package Library for this workspace.\n\nCanonical: `METHOD\\nPATH\\nTIMESTAMP\\nBODY_SHA256_HEX` (+ `\\nNONCE` for POST/PUT/PATCH/DELETE). Path = pathname only (no `?query`). **`/v1/health*`** skips HMAC.\n\nAdmin mutating routes include **`Idempotency-Key: {{$guid}}`** per controller.\n\n## Swagger\n`GET {{baseUrl}}/docs/admin` · `GET {{baseUrl}}/docs/client` when `SWAGGER_ENABLED=true`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8081" },
+    {
+      "key": "exampleAssetMint",
+      "value": "So11111111111111111111111111111111111111112"
+    },
+    {
+      "key": "exampleAssetPda",
+      "value": "So11111111111111111111111111111111111111112"
+    },
+    {
+      "key": "exampleWallet",
+      "value": "So11111111111111111111111111111111111111112"
+    },
+    {
+      "key": "exampleRedemptionId",
+      "value": "So11111111111111111111111111111111111111112_So11111111111111111111111111111111111111112"
+    },
+    {
+      "key": "exampleTxSignature",
+      "value": "3uqfZ3rwjQ17rR4EMZ76fadujpjQuq8d727vrGBS3NpU6kBwLZrKjJxsWfksfcb6avaut5aqUJtBqZ8sXhGFWTaT"
+    },
+    {
+      "key": "exampleChallengeId",
+      "value": "00000000-0000-4000-8000-000000000001"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "function loadCryptoJS() {",
+          "  const root = typeof globalThis !== 'undefined' ? globalThis : typeof global !== 'undefined' ? global : {};",
+          "  if (root.CryptoJS) return root.CryptoJS;",
+          "  try { return require('crypto-js'); } catch (e) {}",
+          "  if (typeof pm !== 'undefined' && typeof pm.require === 'function') {",
+          "    try { return pm.require('crypto-js'); } catch (e2) {}",
+          "  }",
+          "  throw new Error(",
+          "    '[HMAC] CryptoJS unavailable. Use Postman Desktop (built-in CryptoJS), or add the npm package crypto-js to this workspace (Package Library) so require/pm.require can load it.'",
+          "  );",
+          "}",
+          "const CryptoJS = loadCryptoJS();",
+          "",
+          "function randomNonceHex32() {",
+          "  const hex = '0123456789abcdef';",
+          "  let s = '';",
+          "  for (let i = 0; i < 32; i++) s += hex[Math.floor(Math.random() * 16)];",
+          "  return s;",
+          "}",
+          "",
+          "function requestPath() {",
+          "  if (typeof pm.request.url.getPath === 'function') {",
+          "    const p = pm.request.url.getPath();",
+          "    if (p && typeof p === 'string') return p.startsWith('/') ? p : '/' + p;",
+          "  }",
+          "  const segs = pm.request.url.path;",
+          "  if (Array.isArray(segs) && segs.length) return '/' + segs.filter(Boolean).join('/');",
+          "  const raw = pm.variables.replaceIn(pm.request.url.toString());",
+          "  try {",
+          "    const u = new URL(raw);",
+          "    return u.pathname || '/';",
+          "  } catch (e) {",
+          "    return '/';",
+          "  }",
+          "}",
+          "",
+          "const method = pm.request.method.toUpperCase();",
+          "const path = requestPath();",
+          "",
+          "if (path.startsWith('/v1/health')) {",
+          "  ['x-timestamp', 'x-signature', 'x-nonce', 'X-Timestamp', 'X-Signature', 'X-Nonce'].forEach((h) => {",
+          "    try { pm.request.headers.remove(h); } catch (e) {}",
+          "  });",
+          "  return;",
+          "}",
+          "",
+          "const isAdmin = path.startsWith('/v1/admin');",
+          "const secretKey = isAdmin ? 'ADMIN_HMAC_SECRET' : 'CLIENT_HMAC_SECRET';",
+          "const secret = pm.environment.get(secretKey) || pm.collectionVariables.get(secretKey);",
+          "if (!secret) {",
+          "  console.warn('[HMAC] Set environment variable ' + secretKey + ' (≥32 chars, match backend .env).');",
+          "  return;",
+          "}",
+          "",
+          "const ts = String(Date.now());",
+          "let rawBody = '';",
+          "try {",
+          "  const b = pm.request.body;",
+          "  if (b && b.mode === 'raw' && typeof b.raw === 'string') rawBody = b.raw;",
+          "} catch (e) {}",
+          "",
+          "const bodyHash = CryptoJS.SHA256(rawBody).toString(CryptoJS.enc.Hex);",
+          "const mutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);",
+          "",
+          "let canonical;",
+          "let nonce = '';",
+          "if (mutating) {",
+          "  nonce = randomNonceHex32();",
+          "  canonical = [method, path, ts, bodyHash, nonce].join('\\n');",
+          "} else {",
+          "  canonical = [method, path, ts, bodyHash].join('\\n');",
+          "  try { pm.request.headers.remove('X-Nonce'); } catch (e) {}",
+          "  try { pm.request.headers.remove('x-nonce'); } catch (e) {}",
+          "}",
+          "",
+          "const sig = CryptoJS.HmacSHA256(canonical, secret).toString(CryptoJS.enc.Hex);",
+          "",
+          "pm.request.headers.upsert({ key: 'X-Timestamp', value: ts });",
+          "pm.request.headers.upsert({ key: 'X-Signature', value: sig });",
+          "if (mutating) pm.request.headers.upsert({ key: 'X-Nonce', value: nonce });"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Public",
+      "item": [
+        {
+          "name": "GET /v1/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/health",
+            "description": "`HealthController` — no HMAC."
+          }
+        },
+        {
+          "name": "GET /v1/health/ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/health/ready",
+            "description": "`HealthController.ready` — Redis ping."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "`AdminHmacGuard` + **ADMIN_HMAC_SECRET**. Idempotent admin writes require **Idempotency-Key**.",
+      "item": [
+        {
+          "name": "GET /v1/admin/ping",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/admin/ping",
+            "description": "`AdminPingController`"
+          }
+        },
+        {
+          "name": "POST /v1/admin/asset-classes",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Demo class\",\n  \"decimals\": 6,\n  \"mintingMode\": 0,\n  \"redemptionEnabled\": true,\n  \"transferable\": true,\n  \"requiresKyc\": false\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/admin/asset-classes",
+            "description": "`AdminRestController.createAssetClass`"
+          }
+        },
+        {
+          "name": "POST /v1/admin/assets",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assetClassName\": \"Demo class\",\n  \"metadataUri\": \"https://example.com/metadata.json\",\n  \"admin\": null,\n  \"minter\": null,\n  \"auditor\": null\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/admin/assets",
+            "description": "`AdminRestController.createAsset` — optional role overrides omit or null."
+          }
+        },
+        {
+          "name": "PATCH /v1/admin/assets/:assetMint/active",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active\": true\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/admin/assets/{{exampleAssetMint}}/active",
+            "description": "`AdminRestController.setActive`"
+          }
+        },
+        {
+          "name": "PATCH /v1/admin/assets/:assetMint/roles",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"admin\": \"So11111111111111111111111111111111111111112\",\n  \"minter\": \"So11111111111111111111111111111111111111112\",\n  \"auditor\": \"So11111111111111111111111111111111111111112\"\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/admin/assets/{{exampleAssetMint}}/roles",
+            "description": "`AdminRestController.setRoles`"
+          }
+        },
+        {
+          "name": "POST /v1/admin/assets/pda/:assetPda/approvals",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletPublicKey\": \"{{exampleWallet}}\",\n  \"flags\": \"0\"\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/admin/assets/pda/{{exampleAssetPda}}/approvals",
+            "description": "`AdminRestController.approveWallet` — assetPda is tokenized_assets Asset PDA."
+          }
+        },
+        {
+          "name": "DELETE /v1/admin/assets/pda/:assetPda/approvals/:walletPublicKey",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Idempotency-Key", "value": "{{$guid}}" }],
+            "url": "{{baseUrl}}/v1/admin/assets/pda/{{exampleAssetPda}}/approvals/{{exampleWallet}}",
+            "description": "`AdminRestController.revokeWallet` — empty body."
+          }
+        },
+        {
+          "name": "POST /v1/admin/assets/:assetMint/reserve-proofs",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"totalBacked\": \"1000000\",\n  \"proofHash\": \"0000000000000000000000000000000000000000000000000000000000000000\",\n  \"proofUri\": \"https://example.com/proof.json\"\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/admin/assets/{{exampleAssetMint}}/reserve-proofs",
+            "description": "`AdminRestController.reserveProof`"
+          }
+        },
+        {
+          "name": "POST /v1/admin/assets/:assetMint/mints",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipientWallet\": \"{{exampleWallet}}\",\n  \"amount\": \"1\",\n  \"reference\": \"postman-test\"\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/admin/assets/{{exampleAssetMint}}/mints",
+            "description": "`AdminRestController.mint`"
+          }
+        },
+        {
+          "name": "POST /v1/admin/assets/:assetMint/sync-supply",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Idempotency-Key", "value": "{{$guid}}" }],
+            "url": "{{baseUrl}}/v1/admin/assets/{{exampleAssetMint}}/sync-supply",
+            "description": "`AdminRestController.syncSupply` — no JSON body; leave Body empty so HMAC hashes empty string."
+          }
+        },
+        {
+          "name": "PATCH /v1/admin/protocol/config",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newAuthority\": null,\n  \"newName\": null\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/admin/protocol/config",
+            "description": "`AdminRestController.protocolConfig` — set fields as needed."
+          }
+        },
+        {
+          "name": "POST /v1/admin/protocol/pause",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}\n" },
+            "url": "{{baseUrl}}/v1/admin/protocol/pause",
+            "description": "`AdminRestController.pause`"
+          }
+        },
+        {
+          "name": "POST /v1/admin/protocol/unpause",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}\n" },
+            "url": "{{baseUrl}}/v1/admin/protocol/unpause",
+            "description": "`AdminRestController.unpause`"
+          }
+        },
+        {
+          "name": "POST /v1/admin/redemptions/:redemptionId/fulfill",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assetMint\": \"{{exampleAssetMint}}\",\n  \"userWallet\": \"{{exampleWallet}}\",\n  \"settlementReference\": \"postman-settlement-1\"\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/admin/redemptions/{{exampleRedemptionId}}/fulfill",
+            "description": "`AdminRestController.fulfillRedemption`"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Client",
+      "description": "`ClientHmacGuard` + **CLIENT_HMAC_SECRET** (routes outside `/v1/admin` and `/v1/health`).",
+      "item": [
+        {
+          "name": "GET /v1/ping",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/ping",
+            "description": "`ClientPingController`"
+          }
+        },
+        {
+          "name": "POST /v1/wallets/link-challenge",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"publicKey\": \"{{exampleWallet}}\"\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/wallets/link-challenge",
+            "description": "`ClientChainController.linkChallenge`"
+          }
+        },
+        {
+          "name": "POST /v1/wallets/link",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challengeId\": \"{{exampleChallengeId}}\",\n  \"publicKey\": \"{{exampleWallet}}\",\n  \"signature\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/wallets/link",
+            "description": "`ClientChainController.link` — replace challengeId + signature after a real challenge."
+          }
+        },
+        {
+          "name": "GET /v1/me/positions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/me/positions?wallets={{exampleWallet}}&mints={{exampleAssetMint}}",
+            "description": "`ClientChainController.positions` — query: wallets, mints (comma-separated)."
+          }
+        },
+        {
+          "name": "GET /v1/assets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/assets",
+            "description": "`ClientChainController.listAssets` — optional `?mints=` CSV."
+          }
+        },
+        {
+          "name": "GET /v1/assets (filtered)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/assets?mints={{exampleAssetMint}}",
+            "description": "`ClientChainController.listAssets` with mints filter."
+          }
+        },
+        {
+          "name": "POST /v1/assets/:assetMint/redemptions",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userWallet\": \"{{exampleWallet}}\",\n  \"amount\": \"1\",\n  \"requiresKyc\": false\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/assets/{{exampleAssetMint}}/redemptions",
+            "description": "`ClientChainController.requestRedemption`"
+          }
+        },
+        {
+          "name": "POST /v1/redemptions/:redemptionId/submit",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signedTransaction\": \"AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/redemptions/{{exampleRedemptionId}}/submit",
+            "description": "`ClientChainController.submitRedemption` — replace with valid base64 wire tx."
+          }
+        },
+        {
+          "name": "POST /v1/redemptions/:redemptionId/cancel",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assetMint\": \"{{exampleAssetMint}}\",\n  \"userWallet\": \"{{exampleWallet}}\",\n  \"requiresKyc\": false\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/redemptions/{{exampleRedemptionId}}/cancel",
+            "description": "`ClientChainController.cancelRedemption`"
+          }
+        },
+        {
+          "name": "POST /v1/assets/:assetMint/subscriptions",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plan\": \"monthly\",\n  \"note\": \"postman stub\"\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/assets/{{exampleAssetMint}}/subscriptions",
+            "description": "`ClientChainController.subscription` — body is arbitrary JSON (catchall schema)."
+          }
+        },
+        {
+          "name": "POST /v1/assets/pda/:assetPda/approvals/me",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletPublicKey\": \"{{exampleWallet}}\"\n}\n"
+            },
+            "url": "{{baseUrl}}/v1/assets/pda/{{exampleAssetPda}}/approvals/me",
+            "description": "`ClientChainController.approveMe` — policy authority signer on backend."
+          }
+        },
+        {
+          "name": "GET /v1/transactions/:signature",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/v1/transactions/{{exampleTxSignature}}",
+            "description": "`ClientChainController.txStatus`"
+          }
+        }
+      ]
+    }
+  ]
+}

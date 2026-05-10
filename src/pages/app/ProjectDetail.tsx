@@ -52,7 +52,7 @@ export default function ProjectDetail() {
   };
 
   useEffect(() => { load(); }, [activeCompany, id]);
-  useEffect(() => { if (project) document.title = `${project.name} · Aetheria`; }, [project]);
+  useEffect(() => { if (project) document.title = `${project.name} · Farmchain`; }, [project]);
 
   const advance = async () => {
     if (!project || !activeCompany || !user) return;
